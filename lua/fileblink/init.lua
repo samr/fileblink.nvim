@@ -36,10 +36,11 @@ local default_config = {
         sass = { "css", "html" },
     },
 
-    -- Alternative file patterns: suffix -> list of possible suffixes
+    -- Alternative file patterns: prefix/suffix -> list of possible prefix/suffixes
     alternative_patterns = {
         -- Test file patterns
-        ["_test"] = { "" },
+        ["_test"] = { "" }, -- suffix
+        ["test_/"] = { "" }, -- prefix
         ["_spec"] = { "" },
         [".test"] = { "" },
         [".spec"] = { "" },
@@ -56,6 +57,7 @@ local default_config = {
         -- Collected mapping the other way.
         [""] = {
             "_test",
+            "test_/",
             "_spec",
             ".test",
             ".spec",
@@ -279,24 +281,55 @@ local function search_file_in_directory(directory, basename, extension)
     return nil
 end
 
-local function get_basename_parts(basename)
-    for suffix, _ in pairs(config.alternative_patterns) do
-        if suffix ~= nil and suffix ~= "" and vim.endswith(basename, suffix) then
-            local core_basename = basename:sub(1, -(#suffix + 1))
-            return core_basename, suffix
-        end
+local function get_prefix_and_suffix(alternative_pattern)
+    if alternative_pattern == nil or alternative_pattern == "" then
+        return "", ""
+    end
+    local prefix, suffix = string.match(alternative_pattern, "([^/]*)/(.*)")
+    if prefix ~= nil and suffix ~= nil then
+        return prefix, suffix
+    end
+    prefix = string.match(alternative_pattern, "([^/]+)/")
+    if prefix ~= nil then
+        return prefix, ""
+    end
+    suffix = string.match(alternative_pattern, "/(.+)")
+    if suffix ~= nil then
+        return "", suffix
     end
 
-    return basename, ""
+    return "", alternative_pattern
 end
 
-local function generate_alternative_basenames(core_basename, current_suffix, extension)
+local function get_basename_parts(basename)
+    for pattern, _ in pairs(config.alternative_patterns) do
+        prefix, suffix = get_prefix_and_suffix(pattern)
+        local core_basename = basename
+        if prefix ~= "" and vim.startswith(basename, prefix) then
+            core_basename = core_basename:sub(#prefix + 1)
+        end
+        if suffix ~= "" and vim.endswith(basename, suffix) then
+            core_basename = core_basename:sub(1, -(#suffix + 1))
+        end
+        if core_basename ~= basename then
+            return prefix, core_basename, suffix
+        end
+    end
+    return "", basename, ""
+end
+
+local function generate_alternative_basenames(current_prefix, core_basename, current_suffix, extension)
     local alternatives = {}
-    local patterns = config.alternative_patterns[current_suffix] or {}
+    local patterns = config.alternative_patterns[current_prefix .. "/" .. current_suffix]
+        or config.alternative_patterns[current_prefix .. "/"]
+        or config.alternative_patterns["/" .. current_suffix]
+        or config.alternative_patterns[current_suffix]
+        or {}
 
     -- Add alternatives based on current suffix
-    for _, target_suffix in ipairs(patterns) do
-        local alt_basename = core_basename .. target_suffix
+    for _, target_pattern in ipairs(patterns) do
+        target_prefix, target_suffix = get_prefix_and_suffix(target_pattern)
+        local alt_basename = target_prefix .. core_basename .. target_suffix
         table.insert(alternatives, alt_basename)
     end
 
@@ -322,6 +355,7 @@ local function search_alternative_files(
     start_dir,
     alternative_basenames,
     extension,
+    current_prefix,
     core_basename,
     current_suffix
 )
@@ -342,11 +376,11 @@ local function search_alternative_files(
 
     -- Second, check directory mapping cache for predicted locations
     for _, alt_basename in ipairs(alternative_basenames) do
-        local _, alt_suffix = get_basename_parts(alt_basename)
+        local alt_prefix, _, alt_suffix = get_basename_parts(alt_basename)
         local predicted_dir = get_predicted_directory(
             start_dir,
-            current_suffix .. "." .. extension,
-            alt_suffix .. "." .. extension,
+            current_prefix .. "|" .. current_suffix .. "." .. extension,
+            alt_prefix .. "|" .. alt_suffix .. "." .. extension,
             root_dir
         )
         if predicted_dir then
@@ -357,9 +391,9 @@ local function search_alternative_files(
                 add_to_cache(cache_key, found_file)
                 add_directory_mapping_to_cache(
                     start_dir,
-                    current_suffix .. "." .. extension,
+                    current_prefix .. "|" .. current_suffix .. "." .. extension,
                     predicted_dir,
-                    alt_suffix .. "." .. extension,
+                    alt_prefix .. "|" .. alt_suffix .. "." .. extension,
                     root_dir
                 )
                 table.insert(found_files, found_file)
@@ -404,12 +438,12 @@ local function search_alternative_files(
 
                 -- Cache the directory mapping for future predictions
                 local found_dir = vim.fn.fnamemodify(found_file, ":h")
-                local _, alt_suffix = get_basename_parts(alt_basename)
+                local alt_prefix, _, alt_suffix = get_basename_parts(alt_basename)
                 add_directory_mapping_to_cache(
                     start_dir,
-                    current_suffix .. "." .. extension,
+                    current_prefix .. "|" .. current_suffix .. "." .. extension,
                     found_dir,
-                    alt_suffix .. "." .. extension,
+                    alt_prefix .. "|" .. alt_suffix .. "." .. extension,
                     root_dir
                 )
 
@@ -434,12 +468,12 @@ local function search_alternative_files(
 
                 -- Cache the directory mapping for future predictions
                 local found_dir = vim.fn.fnamemodify(file_path, ":h")
-                local _, alt_suffix = get_basename_parts(alt_basename)
+                local alt_prefix, _, alt_suffix = get_basename_parts(alt_basename)
                 add_directory_mapping_to_cache(
                     start_dir,
-                    current_suffix .. "." .. extension,
+                    current_prefix .. "|" .. current_suffix .. "." .. extension,
                     found_dir,
-                    alt_suffix .. "." .. extension,
+                    alt_prefix .. "|" .. alt_suffix .. "." .. extension,
                     root_dir
                 )
 
@@ -683,10 +717,11 @@ function M.switch_file_alternative()
     end
 
     -- Extract core basename and current suffix
-    local core_basename, current_suffix = get_basename_parts(basename)
+    local current_prefix, core_basename, current_suffix = get_basename_parts(basename)
 
     -- Generate alternative basenames
-    local alternative_basenames = generate_alternative_basenames(core_basename, current_suffix, extension)
+    local alternative_basenames =
+        generate_alternative_basenames(current_prefix, core_basename, current_suffix, extension)
 
     if #alternative_basenames == 0 then
         vim.notify("No alternative patterns found for '" .. basename .. "'", vim.log.levels.WARN)
@@ -697,8 +732,15 @@ function M.switch_file_alternative()
     local root_dir = find_root_directory(directory)
 
     -- Search for alternative files
-    local found_files =
-        search_alternative_files(root_dir, directory, alternative_basenames, extension, core_basename, current_suffix)
+    local found_files = search_alternative_files(
+        root_dir,
+        directory,
+        alternative_basenames,
+        extension,
+        current_prefix,
+        core_basename,
+        current_suffix
+    )
 
     if #found_files == 0 then
         local alt_list = table.concat(alternative_basenames, ", ")
@@ -739,8 +781,9 @@ function M.show_alternative_files()
         return
     end
 
-    local core_basename, current_suffix = get_basename_parts(basename)
-    local alternative_basenames = generate_alternative_basenames(core_basename, current_suffix, extension)
+    local current_prefix, core_basename, current_suffix = get_basename_parts(basename)
+    local alternative_basenames =
+        generate_alternative_basenames(current_prefix, core_basename, current_suffix, extension)
 
     if #alternative_basenames == 0 then
         vim.notify("No alternative patterns found for '" .. basename .. "'", vim.log.levels.WARN)
@@ -748,8 +791,15 @@ function M.show_alternative_files()
     end
 
     local root_dir = find_root_directory(directory)
-    local found_files =
-        search_alternative_files(root_dir, directory, alternative_basenames, extension, core_basename, current_suffix)
+    local found_files = search_alternative_files(
+        root_dir,
+        directory,
+        alternative_basenames,
+        extension,
+        current_prefix,
+        core_basename,
+        current_suffix
+    )
 
     if #found_files == 0 then
         local alt_list = table.concat(alternative_basenames, ", ")

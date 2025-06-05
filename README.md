@@ -10,32 +10,36 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
 
 - Recursively search from the directory of the current file in Neovim (e.g. `foo.h`) upwards in the directory tree, and
     then downwards, until a file with a matching mapped extension exists (e.g. `foo.c`).
-- Also, make it fast by caching the location of the found file, and the directory structure. This should make future
-    lookups of similar files fast (e.g. `a/include/b/c/bar.h` to `a/src/c/bar.c` will not require crawling the tree).
+- Make it fast by caching the location of the found file, and the directory structure. This should make future lookups
+    of similar files fast (e.g. `a/include/b/c/bar.h` to `a/src/c/bar.c` will not require crawling the tree).
 - Prevent searching for anything above a detected project root directory. The project root is detected by finding one of
     a set of special files or directories that only exist in the root (e.g. a '.git' directory).
+- Provide a switch based on file extension, listed in priority order.
+- Provide an alternative switch based on prefix and/or suffix, but assuming the same extension.
 
 ## Installation
 
 - Neovim required
-- Install using your favorite plugin manager (e.g. [lazy.nvim](https://lazy.folke.io/usage)).
+- Install using your favorite plugin manager (e.g. [lazy.nvim](https://lazy.folke.io/usage)) and optionally configure
+    your own settings.
 ```
 {
    'samr/fileblink.nvim',
     config = function()
       require("fileblink").setup(
-        -- Customize extension mappings
+        -- Add your own extension mappings here, for example:
         extension_maps = {
-            -- Add your own mappings here, for example:
             py = { "pyi", "pyx" },
             pyi = { "py" },
             pyx = { "py" },
         },
 
+        -- Add your own alternative mappings here, for example:
         alternative_patterns = {
-            -- Add your own mappings here, for example this handles "foo.cc" <-> "foo_test.cc":
-            ["_test"] = { "" },
-            [""] = { "_test" },
+            ["_test"] = { "" },       -- suffix  (foo_test.cc -> foo.cc)
+            ["test_/"] = { "" },      -- prefix  (test_foo.cc -> foo.cc)
+            ["test_/_spec"] = { "" }, -- prefix + suffix  (test_foo_spec.cc -> foo.cc)
+            [""] = { "_test", "test_/", "test_/_spec" },  -- maps back (foo.cc -> *)
         },
 
         -- Set project root markers (i.e. files or directories that exist only in project root).
@@ -84,10 +88,11 @@ The default configuration settings are:
         sass = { "css", "html" },
     },
 
-    -- Alternative file patterns: suffix -> list of possible suffixes
+    -- Alternative file patterns: prefix/suffix -> list of possible prefix/suffixes
     alternative_patterns = {
         -- Test file patterns
-        ["_test"] = { "" },
+        ["_test"] = { "" },       
+        ["test_/"] = { "" },      
         ["_spec"] = { "" },
         [".test"] = { "" },
         [".spec"] = { "" },
@@ -104,6 +109,7 @@ The default configuration settings are:
         -- Collected mapping the other way.
         [""] = {
             "_test",
+            "test_/",
             "_spec",
             ".test",
             ".spec",
