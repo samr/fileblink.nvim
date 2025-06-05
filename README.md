@@ -8,11 +8,12 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
 
 ## The Solution
 
-Recursively search from the directory of the current file in Neovim (e.g. `foo.h`) upwards in the directory tree, and
-then downwards, until a file with a matching mapped extension exists (e.g. `foo.c`). Also, make it fast by caching the
-location of the found file, and the directory structure -- making future lookups of similar files fast (e.g.
-`a/include/b/c/bar.h` to `a/src/c/bar.c` will not require crawling the tree). Prevent the search from going above any
-detected project root, as defined by the directory containing files normally found in a project root directory.
+- Recursively search from the directory of the current file in Neovim (e.g. `foo.h`) upwards in the directory tree, and
+    then downwards, until a file with a matching mapped extension exists (e.g. `foo.c`).
+- Also, make it fast by caching the location of the found file, and the directory structure. This should make future
+    lookups of similar files fast (e.g. `a/include/b/c/bar.h` to `a/src/c/bar.c` will not require crawling the tree).
+- Prevent searching for anything above a detected project root directory. The project root is detected by finding one of
+    a set of special files or directories that only exist in the root (e.g. a '.git' directory).
 
 ## Installation
 
@@ -37,7 +38,7 @@ detected project root, as defined by the directory containing files normally fou
             [""] = { "_test" },
         },
 
-        -- Customize project root directory markers (i.e. files or directories that exist only at the project root).
+        -- Set project root markers (i.e. files or directories that exist only in project root).
         root_markers = { ".git", "package.json", "Cargo.toml" },
 
         -- Adjust cache size (i.e. number of files and directories to store, default=10000)
