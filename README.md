@@ -3,8 +3,8 @@
 ## The Problem
 
 You are working with files that have a clear relationship based on their file extensions and would like to switch
-quickly between files that have a similar filename root (e.g. `foo.h` and `foo.c`) even if they are in differnt places in
-the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
+quickly between files that have a similar filename root (e.g. `foo.h` and `foo.c`) even if they are in different places
+in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
 
 ## The Solution
 
@@ -101,7 +101,7 @@ The default configuration settings are:
 ```
 
 Note that if you override a specific setting (e.g. `extension_maps`) that it will be entirely replace and not added-to.
-So be explicit in what you want. However, if you overwrite only `extension_maps` then the above defulat `root_markers`
+So be explicit in what you want. However, if you overwrite only `extension_maps` then the above default `root_markers`
 will still be defined as the default specified above.
 
 ## Default Commands
@@ -113,7 +113,7 @@ The default commands available are:
 - `:FileBlinkClearCache` - Clear the cache
 - `:FileBlinkShowStats` - Show cache usage statistics
 
-To map themp to keys you can use something like the following.
+To map them to keys you can use something like the following.
 
 ```
 vim.keymap.set('n', '<leader>fs', '<cmd>FileBlinkSwitch<cr>', { desc = 'Switch to related file' })
