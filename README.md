@@ -17,7 +17,7 @@ detected project root, as defined by the directory containing files normally fou
 ## Installation
 
 - Neovim required
-- Install using your favorite plugin manager (e.g. (lazy.nvim)[https://lazy.folke.io/usage]).
+- Install using your favorite plugin manager (e.g. [lazy.nvim](https://lazy.folke.io/usage)).
 ```
 {
    'samr/fileblink.nvim',
