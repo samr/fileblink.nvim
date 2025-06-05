@@ -31,7 +31,13 @@ detected project root, as defined by the directory containing files normally fou
             pyx = { "py" },
         },
 
-        -- Customize root markers
+        alternative_patterns = {
+            -- Add your own mappings here, for example this handles "foo.cc" <-> "foo_test.cc":
+            ["_test"] = { "" },
+            [""] = { "_test" },
+        },
+
+        -- Customize project root directory markers (i.e. files or directories that exist only at the project root).
         root_markers = { ".git", "package.json", "Cargo.toml" },
 
         -- Adjust cache size (i.e. number of files and directories to store, default=10000)
@@ -77,6 +83,37 @@ The default configuration settings are:
         sass = { "css", "html" },
     },
 
+    -- Alternative file patterns: suffix -> list of possible suffixes
+    alternative_patterns = {
+        -- Test file patterns
+        ["_test"] = { "" },
+        ["_spec"] = { "" },
+        [".test"] = { "" },
+        [".spec"] = { "" },
+
+        -- Implementation patterns
+        ["_impl"] = { "" },
+        ["_implementation"] = { "" },
+        [".impl"] = { "" },
+
+        -- Mock patterns
+        ["_mock"] = { "" },
+        [".mock"] = { "" },
+
+        -- Collected mapping the other way.
+        [""] = {
+            "_test",
+            "_spec",
+            ".test",
+            ".spec",
+            "_impl",
+            "_implementation",
+            ".impl",
+            "_mock",
+            ".mock",
+        },
+    },
+
     -- Root directory marker files (plugin won't search above directories containing these)
     root_markers = {
         ".git",
@@ -109,7 +146,9 @@ will still be defined as the default specified above.
 The default commands available are:
 
 - `:FileBlinkSwitch` - Switch to the first available related file
+- `:FileBlinkSwitchAlternative` - Switch to the first available related file based on suffix mapping
 - `:FileBlinkShowFiles` - List all available files for current basename
+- `:FileBlinkShowFilesAlternative` - List all available alternative files for current basename
 - `:FileBlinkClearCache` - Clear the cache
 - `:FileBlinkShowStats` - Show cache usage statistics
 
