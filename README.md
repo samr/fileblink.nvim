@@ -1,5 +1,3 @@
-<div align="center">
-
 # FileBlink
 
 ## The Problem
