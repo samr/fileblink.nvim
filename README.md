@@ -8,14 +8,15 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
 
 ## The Solution
 
+- Allow switching based on file extension (e.g. `foo.h` -> `foo.c` and vice versa).
+- Also allow switching based on prefix and/or suffix, but assuming the same extension (e.g. `foo.cc` -> `foo_test.cc`
+    and vice versa).
 - Recursively search from the directory of the current file in Neovim (e.g. `foo.h`) upwards in the directory tree, and
     then downwards, until a file with a matching mapped extension exists (e.g. `foo.c`).
 - Make it fast by caching the location of the found file, and the directory structure. This should make future lookups
     of similar files fast (e.g. `a/include/b/c/bar.h` to `a/src/c/bar.c` will not require crawling the tree).
 - Prevent searching for anything above a detected project root directory. The project root is detected by finding one of
     a set of special files or directories that only exist in the root (e.g. a '.git' directory).
-- Provide a switch based on file extension, listed in priority order.
-- Provide an alternative switch based on prefix and/or suffix, but assuming the same extension.
 
 ## Installation
 
@@ -38,9 +39,9 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
 
         -- Add your own alternative mappings here, for example:
         alternative_patterns = {
-            ["_test"] = { "" },       -- suffix  (foo_test.cc -> foo.cc)
             ["test_/"] = { "" },      -- prefix  (test_foo.cc -> foo.cc)
-            ["test_/_spec"] = { "" }, -- prefix + suffix  (test_foo_spec.cc -> foo.cc)
+            ["/_test"] = { "" },      -- suffix  (foo_test.cc -> foo.cc)
+            ["test_/_spec"] = { "" }, -- prefix/suffix  (test_foo_spec.cc -> foo.cc)
             [""] = { "_test", "test_/", "test_/_spec" },  -- maps back (foo.cc -> *)
         },
 
@@ -72,7 +73,7 @@ extension_maps = {
 }
 
 alternative_patterns = {
-    ["_test"] = { "" },
+    ["_test"] = { "" },  -- another way to represent a suffix
     ["test_/"] = { "" },
     ["test_/_spec"] = { "" },
     [""] = { "_test", "test_/", "test_/_spec" },
@@ -88,7 +89,7 @@ working directory. Loading of `.fileblinkrc` files can be turned off altogether 
 The default commands available are:
 
 - `:FileBlinkSwitch` - Switch to the first available related file
-- `:FileBlinkSwitchAlternative` - Switch to the first available related file based on suffix mapping
+- `:FileBlinkSwitchAlternative` - Switch to the first available related file based on prefix/suffix mapping
 - `:FileBlinkShowFiles` - List all available files for current basename
 - `:FileBlinkShowFilesAlternative` - List all available alternative files for current basename
 - `:FileBlinkClearCache` - Clear the cache
