@@ -26,7 +26,7 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
 {
    'samr/fileblink.nvim',
     config = function()
-      require("fileblink").setup(
+      require("fileblink").setup({
         -- Add your own extension mappings here, for example:
         extension_maps = {
             h = { "cpp", "cc", "c" },
@@ -49,7 +49,7 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
 
         -- Adjust cache size (i.e. number of files and directories to store, default=10000)
         cache_size = 500,
-      )
+    })
     end,
 }
 ```
