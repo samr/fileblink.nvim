@@ -38,7 +38,7 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
         },
 
         -- Add your own alternative mappings here, for example:
-        alternative_patterns = {
+        prefix_suffix_maps = {
             ["test_/"] = { "" },      -- prefix  (test_foo.cc -> foo.cc)
             ["/_test"] = { "" },      -- suffix  (foo_test.cc -> foo.cc)
             ["test_/_spec"] = { "" }, -- prefix/suffix  (test_foo_spec.cc -> foo.cc)
@@ -72,7 +72,7 @@ extension_maps = {
     cpp = { "hpp", "h" },
 }
 
-alternative_patterns = {
+prefix_suffix_maps = {
     ["_test"] = { "" },  -- another way to represent a suffix
     ["test_/"] = { "" },
     ["test_/_spec"] = { "" },
@@ -88,10 +88,10 @@ working directory. Loading of `.fileblinkrc` files can be turned off altogether 
 
 The default commands available are:
 
-- `:FileBlinkSwitch` - Switch to the first available related file
-- `:FileBlinkSwitchAlternative` - Switch to the first available related file based on prefix/suffix mapping
-- `:FileBlinkShowFiles` - List all available files for current basename
-- `:FileBlinkShowFilesAlternative` - List all available alternative files for current basename
+- `:FileBlinkByExtension` - Switch to the first available related file based on extension mappings
+- `:FileBlinkByPrefixSuffix` - Switch to the first available related file based on prefix/suffix mappings
+- `:FileBlinkByExtensionShow` - List all available files for current basename based on extension mappings
+- `:FileBlinkByPrefixSuffixShow` - List all available files for current basename based on prefix/suffix mappings
 - `:FileBlinkClearCache` - Clear the cache
 - `:FileBlinkShowStats` - Show cache usage statistics
 - `:FileBlinkShowConfig` - Attempt to show the current configuration
@@ -100,8 +100,10 @@ The default commands available are:
 To map them to keys you can use something like the following.
 
 ```
-vim.keymap.set('n', '<leader>fs', '<cmd>FileBlinkSwitch<cr>', { desc = 'Switch to related file' })
-vim.keymap.set('n', '<leader>fa', '<cmd>FileBlinkShowFiles<cr>', { desc = 'Show available files' })
+vim.keymap.set('n', '<leader>fs', '<cmd>FileBlinkByExtension<cr>', { desc = 'Switch to related file using extension' })
+vim.keymap.set('n', '<leader>fa', '<cmd>FileBlinkByPrefixSuffix<cr>', { desc = 'Switch to related file using prefix/suffix' })
+vim.keymap.set('n', '<leader>ffs', '<cmd>FileBlinkByExtensionShow<cr>', { desc = 'Show available files by extension' })
+vim.keymap.set('n', '<leader>ffa', '<cmd>FileBlinkByPrefixSuffixShow<cr>', { desc = 'Show available files by prefix/suffix' })
 ```
 
 However, these mappings are not provided by default.
@@ -143,8 +145,8 @@ The default configuration settings are:
         sass = { "css", "html" },
     },
 
-    -- Alternative file patterns: prefix/suffix -> list of possible prefix/suffixes
-    alternative_patterns = {
+    -- Prefix/suffix mappings: prefix/suffix -> list of possible prefix/suffixes
+    prefix_suffix_maps = {
         -- Test file patterns
         ["_test"] = { "" },       
         ["test_/"] = { "" },      

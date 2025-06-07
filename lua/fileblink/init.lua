@@ -36,8 +36,8 @@ local default_config = {
         sass = { "css", "html" },
     },
 
-    -- Alternative file patterns: prefix/suffix -> list of possible prefix/suffixes
-    alternative_patterns = {
+    -- Prefix/suffix mappings: prefix/suffix -> list of possible prefix/suffixes
+    prefix_suffix_maps = {
         -- Test file patterns
         ["_test"] = { "" }, -- suffix
         ["test_/"] = { "" }, -- prefix
@@ -288,28 +288,28 @@ local function search_file_in_directory(directory, basename, extension)
     return nil
 end
 
-local function get_prefix_and_suffix(alternative_pattern)
-    if alternative_pattern == nil or alternative_pattern == "" then
+local function get_prefix_and_suffix(entry)
+    if entry == nil or entry == "" then
         return "", ""
     end
-    local prefix, suffix = string.match(alternative_pattern, "([^/]*)/(.*)")
+    local prefix, suffix = string.match(entry, "([^/]*)/(.*)")
     if prefix ~= nil and suffix ~= nil then
         return prefix, suffix
     end
-    prefix = string.match(alternative_pattern, "([^/]+)/")
+    prefix = string.match(entry, "([^/]+)/")
     if prefix ~= nil then
         return prefix, ""
     end
-    suffix = string.match(alternative_pattern, "/(.+)")
+    suffix = string.match(entry, "/(.+)")
     if suffix ~= nil then
         return "", suffix
     end
 
-    return "", alternative_pattern
+    return "", entry
 end
 
 local function get_basename_parts(basename)
-    for pattern, _ in pairs(config.alternative_patterns) do
+    for pattern, _ in pairs(config.prefix_suffix_maps) do
         prefix, suffix = get_prefix_and_suffix(pattern)
         local core_basename = basename
         if prefix ~= "" and vim.startswith(basename, prefix) then
@@ -327,10 +327,10 @@ end
 
 local function generate_alternative_basenames(current_prefix, core_basename, current_suffix, extension)
     local alternatives = {}
-    local patterns = config.alternative_patterns[current_prefix .. "/" .. current_suffix]
-        or config.alternative_patterns[current_prefix .. "/"]
-        or config.alternative_patterns["/" .. current_suffix]
-        or config.alternative_patterns[current_suffix]
+    local patterns = config.prefix_suffix_maps[current_prefix .. "/" .. current_suffix]
+        or config.prefix_suffix_maps[current_prefix .. "/"]
+        or config.prefix_suffix_maps["/" .. current_suffix]
+        or config.prefix_suffix_maps[current_suffix]
         or {}
 
     -- Add alternatives based on current suffix
@@ -1268,20 +1268,20 @@ end
 function M.setup(user_config)
     config = vim.tbl_extend("force", default_config, user_config or {})
 
-    vim.api.nvim_create_user_command("FileBlinkSwitch", M.switch_file, {
+    vim.api.nvim_create_user_command("FileBlinkByExtension", M.switch_file, {
         desc = "Switch to related file based on extension mapping (e.g. foo.h <-> foo.cc)",
     })
 
-    vim.api.nvim_create_user_command("FileBlinkSwitchAlternative", M.switch_file_alternative, {
-        desc = "Switch to alternative file based on basename patterns (e.g. foo.cc <-> foo_test.cc)",
+    vim.api.nvim_create_user_command("FileBlinkByPrefixSuffix", M.switch_file_alternative, {
+        desc = "Switch to file based on prefix/suffix + basename patterns (e.g. foo.cc <-> foo_test.cc)",
     })
 
-    vim.api.nvim_create_user_command("FileBlinkShowFiles", M.show_available_files, {
-        desc = "Show all available files for current basename",
+    vim.api.nvim_create_user_command("FileBlinkByExtensionShow", M.show_available_files, {
+        desc = "Show all available files for current basename based on extension mappings",
     })
 
-    vim.api.nvim_create_user_command("FileBlinkShowFilesAlternative", M.show_alternative_files, {
-        desc = "Show all available alternative files for current basename",
+    vim.api.nvim_create_user_command("FileBlinkByPrefixSuffixShow", M.show_alternative_files, {
+        desc = "Show all available files for current basename based on prefix/suffix mappings",
     })
 
     vim.api.nvim_create_user_command("FileBlinkClearCache", M.clear_cache, {
