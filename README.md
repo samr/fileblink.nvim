@@ -29,9 +29,11 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
       require("fileblink").setup(
         -- Add your own extension mappings here, for example:
         extension_maps = {
-            py = { "pyi", "pyx" },
-            pyi = { "py" },
-            pyx = { "py" },
+            h = { "cpp", "cc", "c" },
+            hpp = { "cpp", "cc" },
+            c = { "h" },
+            cc = { "hpp", "h" },
+            cpp = { "hpp", "h" },
         },
 
         -- Add your own alternative mappings here, for example:
@@ -43,7 +45,7 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
         },
 
         -- Set project root markers (i.e. files or directories that exist only in project root).
-        root_markers = { ".git", "package.json", "Cargo.toml" },
+        root_markers = { ".git", "package.json" },
 
         -- Adjust cache size (i.e. number of files and directories to store, default=10000)
         cache_size = 500,
@@ -62,9 +64,11 @@ uses the same syntax as the lua configuration. An example of what the file might
 cache_size = 5000
 
 extension_maps = {
-    py = { "pyi", "pyx" },
-    pyi = { "py" },
-    pyx = { "py" },
+    h = { "cpp", "cc", "c" },
+    hpp = { "cpp", "cc" },
+    c = { "h" },
+    cc = { "hpp", "h" },
+    cpp = { "hpp", "h" },
 }
 
 alternative_patterns = {
@@ -75,7 +79,9 @@ alternative_patterns = {
 }
 ```
 
-The `.fileblinkrc` file will be auto loaded when changing buffers or creating new ones. The file can be ignored by setting `ignore_fileblinkrc` to true.
+The `.fileblinkrc` file will be auto loaded when changing buffers or creating new ones. The autoloading can be turned
+off with `autoload_fileblinkrc = false`, in which case it will only be loaded once on Neovim start based on the current
+working directory. Loading of `.fileblinkrc` files can be turned off altogether by setting `ignore_fileblinkrc = true`.
 
 ## Default Commands
 
@@ -199,9 +205,11 @@ The default configuration settings are:
     autoload_fileblinkrc = true,
 ```
 
-Note that if you override a specific setting (e.g. `extension_maps`), either in the global configuration or in a config
-file, that it will be entirely replace and not add-to the existing values. However, if you overwrite only
-`extension_maps` then the above default `root_markers` will still be defined as the default specified above.
+Note that if you override a specific default setting, it will entirely replace the value rather than doing a merge of
+what was there. For example, when loading the above example `.fileblinkrc` file, it will replace the default
+`extension_maps` value such that there is no mapping for going between "html" and "js" files. However, a merge is done
+across all the settings such that, in that example, the `cache_size` will remain 10000, since it was not overridden or
+specified explicitly.
 
 ## Thanks
 
