@@ -20,8 +20,8 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
 ## Installation
 
 - Neovim required
-- Install using your favorite plugin manager (e.g. [lazy.nvim](https://lazy.folke.io/usage)) and optionally configure
-    your own settings.
+- Install using your favorite plugin manager (e.g. [lazy.nvim](https://lazy.folke.io/usage)).
+- Optionally configure your own global settings:
 ```
 {
    'samr/fileblink.nvim',
@@ -51,6 +51,54 @@ in the directory tree (e.g. `a/include/b/c/foo.h` vs `a/src/c/foo.c`).
     end,
 }
 ```
+
+## Per-project Configuration
+
+Creating a `.fileblinkrc` file in the project root directory allows overriding global configuration settings. The file
+uses the same syntax as the lua configuration. An example of what the file might look like is as follows.
+
+```
+# This is a .fileblinkrc file
+cache_size = 5000
+
+extension_maps = {
+    py = { "pyi", "pyx" },
+    pyi = { "py" },
+    pyx = { "py" },
+}
+
+alternative_patterns = {
+    ["_test"] = { "" },
+    ["test_/"] = { "" },
+    ["test_/_spec"] = { "" },
+    [""] = { "_test", "test_/", "test_/_spec" },
+}
+```
+
+The `.fileblinkrc` file will be auto loaded when changing buffers or creating new ones. The file can be ignored by setting `ignore_fileblinkrc` to true.
+
+## Default Commands
+
+The default commands available are:
+
+- `:FileBlinkSwitch` - Switch to the first available related file
+- `:FileBlinkSwitchAlternative` - Switch to the first available related file based on suffix mapping
+- `:FileBlinkShowFiles` - List all available files for current basename
+- `:FileBlinkShowFilesAlternative` - List all available alternative files for current basename
+- `:FileBlinkClearCache` - Clear the cache
+- `:FileBlinkShowStats` - Show cache usage statistics
+- `:FileBlinkShowConfig` - Attempt to show the current configuration
+- `:FileBlinkLoadConfig` - Attempt to load or reload any .fileblinkrc config file found (will not exist when `ignore_fileblinkrc` is true)
+
+To map them to keys you can use something like the following.
+
+```
+vim.keymap.set('n', '<leader>fs', '<cmd>FileBlinkSwitch<cr>', { desc = 'Switch to related file' })
+vim.keymap.set('n', '<leader>fa', '<cmd>FileBlinkShowFiles<cr>', { desc = 'Show available files' })
+```
+
+However, these mappings are not provided by default.
+
 
 ## Default Configuration
 
@@ -142,32 +190,18 @@ The default configuration settings are:
     -- Cache settings
     cache_enabled = true,
     cache_size = 10000,
+
+    -- Whether to ignore .fileblinkrc files, when true will not autoload or parse them.
+    ignore_fileblinkrc = false,
+
+    -- Whether to autoload the file based on the buffer. When false, it will only load once on startup based on the
+    -- current working directory.
+    autoload_fileblinkrc = true,
 ```
 
-Note that if you override a specific setting (e.g. `extension_maps`) that it will be entirely replace and not added-to.
-So be explicit in what you want. However, if you overwrite only `extension_maps` then the above default `root_markers`
-will still be defined as the default specified above.
-
-## Default Commands
-
-The default commands available are:
-
-- `:FileBlinkSwitch` - Switch to the first available related file
-- `:FileBlinkSwitchAlternative` - Switch to the first available related file based on suffix mapping
-- `:FileBlinkShowFiles` - List all available files for current basename
-- `:FileBlinkShowFilesAlternative` - List all available alternative files for current basename
-- `:FileBlinkClearCache` - Clear the cache
-- `:FileBlinkShowStats` - Show cache usage statistics
-
-To map them to keys you can use something like the following.
-
-```
-vim.keymap.set('n', '<leader>fs', '<cmd>FileBlinkSwitch<cr>', { desc = 'Switch to related file' })
-vim.keymap.set('n', '<leader>fa', '<cmd>FileBlinkShowFiles<cr>', { desc = 'Show available files' })
-```
-
-However, these mappings are not provided by default.
-
+Note that if you override a specific setting (e.g. `extension_maps`), either in the global configuration or in a config
+file, that it will be entirely replace and not add-to the existing values. However, if you overwrite only
+`extension_maps` then the above default `root_markers` will still be defined as the default specified above.
 
 ## Thanks
 

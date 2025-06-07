@@ -90,6 +90,13 @@ local default_config = {
     -- Cache settings
     cache_enabled = true,
     cache_size = 10000,
+
+    -- Whether to ignore .fileblinkrc files, when true will not autoload or parse them.
+    ignore_fileblinkrc = false,
+
+    -- Whether to autoload the file based on the buffer. When false, it will only load once on startup based on the
+    -- current working directory.
+    autoload_fileblinkrc = true,
 }
 
 ---------------
@@ -606,6 +613,412 @@ local function search_files_recursively(root_dir, start_dir, basename, target_ex
 end
 
 ---------------------------------
+-- Functions to load config files
+--
+
+-- Finds the .fileblinkrc file, if it exists, by traversing up directories
+local function find_rc_file(start_path)
+    local current_path = start_path or vim.fn.getcwd()
+
+    -- Normalize path separators for cross-platform compatibility
+    current_path = vim.fn.fnamemodify(current_path, ":p")
+
+    while current_path ~= "/" and current_path ~= "" do
+        local rc_path = current_path .. "/.fileblinkrc"
+
+        -- Check if .fileblinkrc exists and is readable
+        if vim.fn.filereadable(rc_path) == 1 then
+            return rc_path
+        end
+
+        -- Move up one directory
+        local parent = vim.fn.fnamemodify(current_path, ":h")
+
+        -- Prevent infinite loop on Windows/systems where parent == current
+        if parent == current_path then
+            break
+        end
+
+        current_path = parent
+    end
+
+    return nil
+end
+
+-- Removes comments from content
+local function remove_comments(content)
+    local result = ""
+    local i = 1
+    local in_string = false
+    local string_char = nil
+
+    while i <= #content do
+        local char = content:sub(i, i)
+        local next_char = content:sub(i + 1, i + 1)
+
+        -- Handle string boundaries
+        if not in_string and (char == '"' or char == "'") then
+            in_string = true
+            string_char = char
+            result = result .. char
+            i = i + 1
+        elseif in_string and char == string_char then
+            -- Check if it's escaped
+            local escape_count = 0
+            local j = i - 1
+            while j >= 1 and content:sub(j, j) == "\\" do
+                escape_count = escape_count + 1
+                j = j - 1
+            end
+
+            if escape_count % 2 == 0 then -- Not escaped
+                in_string = false
+                string_char = nil
+            end
+            result = result .. char
+            i = i + 1
+        elseif not in_string and char == "-" and next_char == "-" then
+            -- Found inline comment, skip to end of line
+            local newline = content:find("\n", i)
+            if newline then
+                result = result .. "\n" -- Keep the newline
+                i = newline + 1
+            else
+                break -- End of file
+            end
+        elseif not in_string and char == "#" then
+            -- Found # comment, skip to end of line
+            local newline = content:find("\n", i)
+            if newline then
+                result = result .. "\n" -- Keep the newline
+                i = newline + 1
+            else
+                break -- End of file
+            end
+        else
+            result = result .. char
+            i = i + 1
+        end
+    end
+
+    return result
+end
+
+-- Parses the .fileblinkrc file with support for nested tables and multi-line values
+local function parse_rc_file(file_path)
+    local settings = {}
+    local file = io.open(file_path, "r")
+
+    if not file then
+        vim.notify("Error: Could not open " .. file_path, vim.log.levels.ERROR)
+        return nil
+    end
+
+    local content = file:read("*all")
+    file:close()
+
+    -- Remove both -- and # comments while preserving string contents
+    content = remove_comments(content)
+
+    local i = 1
+    while i <= #content do
+        -- Skip whitespace
+        local whitespace_end = content:find("[^%s]", i)
+        if not whitespace_end then
+            break
+        end
+        i = whitespace_end
+
+        -- Find key=value pattern
+        local key_start, key_end = content:find("([%w_]+)%s*=", i)
+        if not key_start then
+            break
+        end
+
+        local key = content:sub(key_start, key_end - 1):match("([%w_]+)")
+        i = key_end + 1
+
+        -- Skip whitespace after =
+        local value_start = content:find("[^%s]", i)
+        if not value_start then
+            break
+        end
+        i = value_start
+
+        local value, value_end = parse_value(content, i)
+        if value ~= nil then
+            settings[key] = value
+            i = value_end + 1
+        else
+            -- Skip to next line if parsing failed
+            local next_line = content:find("\n", i)
+            if next_line then
+                i = next_line + 1
+            else
+                break
+            end
+        end
+    end
+
+    return settings
+end
+
+-- Parses a value (string, number, boolean, or table)
+function parse_value(content, start_pos)
+    local i = start_pos
+
+    -- Skip leading whitespace
+    local value_start = content:find("[^%s]", i)
+    if not value_start then
+        return nil, start_pos
+    end
+    i = value_start
+
+    local char = content:sub(i, i)
+
+    -- Parse table/array
+    if char == "{" then
+        return parse_table(content, i)
+    end
+
+    -- Parse quoted string
+    if char == '"' or char == "'" then
+        return parse_quoted_string(content, i)
+    end
+
+    -- Parse unquoted value (boolean, number, or string)
+    return parse_unquoted_value(content, i)
+end
+
+-- Parses table/array structures
+function parse_table(content, start_pos)
+    local i = start_pos + 1 -- skip opening {
+    local result = {}
+    local max_iterations = 1000 -- Safety limit
+    local iterations = 0
+
+    while i <= #content and iterations < max_iterations do
+        iterations = iterations + 1
+
+        -- Skip whitespace and newlines
+        local next_char_pos = content:find("[^%s\n]", i)
+        if not next_char_pos then
+            break
+        end
+        i = next_char_pos
+
+        local char = content:sub(i, i)
+
+        -- End of table
+        if char == "}" then
+            return result, i
+        end
+
+        -- Skip comma
+        if char == "," then
+            i = i + 1
+        else
+            local old_i = i -- Save position to detect infinite loops
+
+            -- Check for key-value pair with brackets: ["key"] = value
+            if char == "[" then
+                local bracket_key_start, bracket_key_end, bracket_key =
+                    content:find("%[%s*[\"']([^\"']*)[\"']%s*%]%s*=", i)
+                if bracket_key_start == i then
+                    i = bracket_key_end + 1
+
+                    -- Parse the value
+                    local value, value_end = parse_value(content, i)
+                    if value ~= nil and value_end >= i then
+                        result[bracket_key] = value
+                        i = value_end + 1
+                    else
+                        -- Skip to next comma or closing brace
+                        local next_comma = content:find(",", i)
+                        local next_brace = content:find("}", i)
+                        if next_comma and (not next_brace or next_comma < next_brace) then
+                            i = next_comma + 1
+                        elseif next_brace then
+                            i = next_brace
+                        else
+                            break
+                        end
+                    end
+                else
+                    -- Not a valid bracket key-value pair, treat as array value
+                    local value, value_end = parse_value(content, i)
+                    if value ~= nil and value_end >= i then
+                        table.insert(result, value)
+                        i = value_end + 1
+                    else
+                        i = i + 1 -- Force advance if parsing fails
+                    end
+                end
+            else
+                -- Check for simple key = value (without brackets)
+                local simple_key_start, simple_key_end, simple_key = content:find("([%w_]+)%s*=", i)
+                if simple_key_start == i then
+                    i = simple_key_end + 1
+
+                    local value, value_end = parse_value(content, i)
+                    if value ~= nil and value_end >= i then
+                        result[simple_key] = value
+                        i = value_end + 1
+                    else
+                        -- Skip to next comma or closing brace
+                        local next_comma = content:find(",", i)
+                        local next_brace = content:find("}", i)
+                        if next_comma and (not next_brace or next_comma < next_brace) then
+                            i = next_comma + 1
+                        elseif next_brace then
+                            i = next_brace
+                        else
+                            break
+                        end
+                    end
+                else
+                    -- Array-style value (no key)
+                    local value, value_end = parse_value(content, i)
+                    if value ~= nil and value_end >= i then
+                        table.insert(result, value)
+                        i = value_end + 1
+                    else
+                        i = i + 1 -- Force advance if parsing fails
+                    end
+                end
+            end
+
+            -- Safety check: if position hasn't advanced, force advancement
+            if i == old_i then
+                i = i + 1
+            end
+        end
+    end
+
+    if iterations >= max_iterations then
+        vim.notify("Warning: Table parsing stopped due to potential infinite loop", vim.log.levels.WARN)
+    end
+
+    -- Return partial result if we didn't find closing brace
+    return result, i
+end
+
+-- Parses quoted strings
+function parse_quoted_string(content, start_pos)
+    local quote_char = content:sub(start_pos, start_pos)
+    local i = start_pos + 1
+    local result = ""
+
+    while i <= #content do
+        local char = content:sub(i, i)
+
+        if char == quote_char then
+            return result, i
+        elseif char == "\\" and i < #content then
+            -- Handle escape sequences
+            local next_char = content:sub(i + 1, i + 1)
+            if next_char == "n" then
+                result = result .. "\n"
+            elseif next_char == "t" then
+                result = result .. "\t"
+            elseif next_char == "\\" then
+                result = result .. "\\"
+            elseif next_char == quote_char then
+                result = result .. quote_char
+            else
+                result = result .. next_char
+            end
+            i = i + 2
+        else
+            result = result .. char
+            i = i + 1
+        end
+    end
+
+    return result, i
+end
+
+-- Parses unquoted values
+function parse_unquoted_value(content, start_pos)
+    local i = start_pos
+    local result = ""
+
+    -- Read until whitespace, comma, newline, or }
+    while i <= #content do
+        local char = content:sub(i, i)
+        if char:match("[%s,}]") or char == "\n" then
+            break
+        end
+        result = result .. char
+        i = i + 1
+    end
+
+    -- Convert to appropriate type
+    if result:lower() == "true" then
+        return true, i - 1
+    elseif result:lower() == "false" then
+        return false, i - 1
+    elseif result:match("^%-?%d+%.?%d*$") then
+        return tonumber(result), i - 1
+    else
+        return result, i - 1
+    end
+end
+
+-- Helper function to format values for display
+local function format_value(value, indent)
+    indent = indent or 0
+    local spaces = string.rep("  ", indent)
+
+    if type(value) == "table" then
+        local result = "{\n"
+        for k, v in pairs(value) do
+            local key_str = type(k) == "string" and '["' .. k .. '"]' or "[" .. tostring(k) .. "]"
+            result = result .. spaces .. "  " .. key_str .. " = " .. format_value(v, indent + 1) .. ",\n"
+        end
+        result = result .. spaces .. "}"
+        return result
+    elseif type(value) == "string" then
+        return '"' .. value .. '"'
+    else
+        return tostring(value)
+    end
+end
+
+-- Loads and applies .fileblinkc configuration
+function M.load_config(path)
+    local rc_path = find_rc_file(path)
+
+    if rc_path then
+        -- vim.notify("Found .fileblinkrc at: " .. rc_path, vim.log.levels.INFO)
+
+        local file_settings = parse_rc_file(rc_path)
+        if file_settings then
+            -- Merge with global settings (file settings override global)
+            for key, value in pairs(file_settings) do
+                config[key] = value
+                -- print(key .. " = " .. format_value(value))
+            end
+
+            -- vim.notify("Applied .fileblinkrc configuration", vim.log.levels.INFO)
+            return true
+        end
+    else
+        -- vim.notify("No .fileblinkrc file found", vim.log.levels.INFO)
+    end
+
+    return false
+end
+
+-- Shows current settings (with pretty printing for tables)
+function M.show_config()
+    print("Current FileBlink configuration settings:")
+    for key, value in pairs(config) do
+        print("  " .. key .. " = " .. format_value(value))
+    end
+end
+
+---------------------------------
 -- Functions that map to commands
 --
 function M.switch_file()
@@ -853,7 +1266,7 @@ end
 -- Setup command to function mappings
 --
 function M.setup(user_config)
-    config = vim.tbl_deep_extend("force", default_config, user_config or {})
+    config = vim.tbl_extend("force", default_config, user_config or {})
 
     vim.api.nvim_create_user_command("FileBlinkSwitch", M.switch_file, {
         desc = "Switch to related file based on extension mapping (e.g. foo.h <-> foo.cc)",
@@ -878,6 +1291,34 @@ function M.setup(user_config)
     vim.api.nvim_create_user_command("FileBlinkShowStats", M.show_cache_stats, {
         desc = "Show file cache statistics",
     })
+
+    vim.api.nvim_create_user_command("FileBlinkShowConfig", M.show_config, {
+        desc = "Show .fileblinkrc configuration",
+    })
+
+    if not config.ignore_fileblinkrc then
+        vim.api.nvim_create_user_command("FileBlinkLoadConfig", function(opts)
+            local path = opts.args and opts.args ~= "" and opts.args or nil
+            M.load_config(path)
+        end, {
+            desc = "Load .foorc configuration",
+            nargs = "?",
+            complete = "dir",
+        })
+
+        if config.autoload_fileblinkrc then
+            -- Auto-load configuration when entering a buffer
+            vim.api.nvim_create_autocmd({ "BufEnter", "BufNewFile" }, {
+                callback = function()
+                    M.load_config()
+                end,
+                desc = "Auto-load .fileblinkrc configuration",
+            })
+        end
+
+        -- Load configuration immediately
+        M.load_config()
+    end
 end
 
 return M
